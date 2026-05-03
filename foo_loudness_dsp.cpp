@@ -314,9 +314,10 @@ private:
         cfg.sample_rate = sample_rate;
         cfg.channel_count = channel_count;
         // Reference SPL of a -20 dBFS RMS pink noise: ~83 dB
-        // This 83 dB level corresponds to a perceived loudness of 80 phon
         // Typical mastering target: -9 LUFS
-        cfg.reference_loudness = 80.0f + (20.0f - 9.0f);
+        // Here we just assume SPL ~= phon. This is only true for a pure 1khz tone, but
+        // it's (probably) good enough for what we need
+        cfg.reference_loudness = 83.0f + (20.0f - 9.0f);
         cfg.current_loudness = loudness;
 
         // We have room allowed by volume control
