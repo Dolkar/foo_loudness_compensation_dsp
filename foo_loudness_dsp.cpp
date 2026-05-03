@@ -2,6 +2,8 @@
 #include "../helpers/helpers.h"
 #include "resource.h"
 #include "lc_filter.h"
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 DECLARE_COMPONENT_VERSION(
     "Loudness Compensation DSP",
@@ -167,10 +169,17 @@ private:
 
 static play_callback_static_factory_t<volume_monitor> foo_loudness_dsp_volume_monitor;
 
-// Finally, this is our DSP class. We need a few extra methods
-// to support presets.
+void crossfade(float t, float& gain_out, float& gain_in)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+    gain_in = sin(M_PI / 2.0 * t);
+    gain_out = cos(M_PI / 2.0 * t);
+}
+
+// The DSP class adapter for foobar. Manages filters and implements crossfade
 class loudness_compensation_dsp : public dsp_impl_base
 {
+    static const int s_crossfade_samples = 500;
 public:
     loudness_compensation_dsp(const dsp_preset& p_data) {
         set_data(p_data);
@@ -230,34 +239,68 @@ public:
         float current_loudness = get_current_loudness();
 
         // Initialize
-        if (!active_filter) {
+        if (!m_active_filter) {
             prepare_active_filter(channel_count, sample_rate, current_loudness);
         }
 
         // Test for changed parameters
-        const lc_filter::config& curr_cfg = active_filter->get_config();
-        if (curr_cfg.channel_count != channel_count || curr_cfg.sample_rate != sample_rate || curr_cfg.current_loudness != current_loudness) {
+        const lc_filter::config& curr_cfg = m_active_filter->get_config();
+        if (curr_cfg.channel_count != channel_count || curr_cfg.sample_rate != sample_rate) {
+            // We can't fade in this case
             prepare_active_filter(channel_count, sample_rate, current_loudness);
+        } else if (curr_cfg.current_loudness != current_loudness && m_fadeout_lifetime <= 0) {
+            // Fade when volume or other parameters have changed
+            std::swap(m_active_filter, m_fadeout_filter);
+            prepare_active_filter(channel_count, sample_rate, current_loudness);
+
+            // Leave half of ir_length for the new filter to warm up
+            m_fadeout_lifetime = curr_cfg.ir_length / 2 + s_crossfade_samples;
         }
 
-        FB2K_DebugLog() << "Sample count: " << sample_count << " Current loudness: " << pfc::format_float(current_loudness, 0, 1) << " phon";
+        if (m_fadeout_lifetime > 0) {
+            // Process chunk with old filter
+            m_fade_buffer.copy(*chunk);
+            m_fadeout_filter->process(m_fade_buffer.get_data(), sample_count);
+        }
 
-        // Process signal
-        active_filter->process(chunk->get_data(), sample_count);
+        // Process chunk with active filter
+        m_active_filter->process(chunk->get_data(), sample_count);
+
+        // Apply crossfade
+        if (m_fadeout_lifetime > 0) {
+            audio_sample* out_data = chunk->get_data();
+            audio_sample* fade_data = m_fade_buffer.get_data();
+
+            for (unsigned i = 0; i < sample_count; i++) {
+                float t = m_fadeout_lifetime / (float)s_crossfade_samples;
+                float old_f, new_f;
+                crossfade(t, new_f, old_f);
+
+                for (unsigned channel = 0; channel < channel_count; channel++) {
+                    unsigned si = i * channel_count + channel;
+                    out_data[si] = old_f * fade_data[si] + new_f * out_data[si];
+                }
+                m_fadeout_lifetime--;
+            }
+        }
 
         // Add (modified) input chunk to output.
         return true;
     }
 
     virtual void flush() {
-        if (!active_filter) {
-            active_filter->flush();
+        if (m_active_filter) {
+            m_active_filter->flush();
         }
-        // Nothing to flush.
+        if (m_fadeout_filter) {
+            m_fadeout_filter->flush();
+        }
+        m_fade_buffer.reset();
+        m_fadeout_lifetime = 0;
     }
 
     virtual double get_latency() {
-        // We have no buffer, so latency is 0.
+        // We use a zero latency filter
         return 0.0;
     }
 
@@ -281,24 +324,30 @@ private:
         cfg.clipping_threshold = -volume;
         cfg.debug = true;
 
-        if (!active_filter) {
-            active_filter = std::make_unique<lc_filter>(cfg);
+        if (!m_active_filter) {
+            m_active_filter = std::make_unique<lc_filter>(cfg);
         } else {
-            active_filter->reset(cfg);
+            m_active_filter->reset(cfg);
         }
     }
 
     float get_current_loudness() const {
         float volume = foo_loudness_dsp_volume_monitor.get_static_instance().get_volume();
 
-        float max_volume_loudness = 90.0f;
+        float max_volume_loudness = 100.0f;
         float loudness = max_volume_loudness + volume;
         // clamp to valid range
         return std::clamp(loudness, 20.0f, 100.0f);
     }
 
-    std::unique_ptr<lc_filter> active_filter;
-    std::unique_ptr<lc_filter> fadeout_filter;
+    // The currently active filter (if any)
+    std::unique_ptr<lc_filter> m_active_filter;
+    // The filter currently being faded out
+    std::unique_ptr<lc_filter> m_fadeout_filter;
+    // Samples until fadeout filter can be turned off
+    int m_fadeout_lifetime = 0;
+    // Buffer used for fading
+    audio_chunk_impl m_fade_buffer;
 };
 
 static dsp_factory_t<loudness_compensation_dsp> foo_loudness_dsp;

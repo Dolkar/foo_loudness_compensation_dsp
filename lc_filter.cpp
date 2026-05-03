@@ -7,7 +7,7 @@
 void lc_filter::reset(const config& cfg)
 {
     m_cfg = cfg;
-    for (auto& conv : convolvers)
+    for (auto& conv : m_convolvers)
         conv->reset();
 
     if (m_cfg.debug) {
@@ -19,7 +19,7 @@ void lc_filter::reset(const config& cfg)
 
 void lc_filter::flush()
 {
-    for (auto& conv : convolvers)
+    for (auto& conv : m_convolvers)
         conv->flush();
 
     if (m_cfg.debug) {
@@ -29,9 +29,9 @@ void lc_filter::flush()
 
 void lc_filter::process(audio_sample* sample_data, t_size sample_count)
 {
-    if (sample_count > input_buffer.size()) {
-        input_buffer.resize(sample_count);
-        output_buffer.resize(sample_count);
+    if (sample_count > m_input_buffer.size()) {
+        m_input_buffer.resize(sample_count);
+        m_output_buffer.resize(sample_count);
     }
 
     t_size stride = m_cfg.channel_count;
@@ -39,14 +39,14 @@ void lc_filter::process(audio_sample* sample_data, t_size sample_count)
         // Copy to input buffer
         t_size offset = channel;
         for (t_size i = 0; i < sample_count; i++) {
-            input_buffer[i] = sample_data[channel + i * stride];
+            m_input_buffer[i] = sample_data[channel + i * stride];
         }
 
-        convolvers[channel]->process(input_buffer.data(), output_buffer.data(), sample_count);
+        m_convolvers[channel]->process(m_input_buffer.data(), m_output_buffer.data(), sample_count);
 
         // Copy it back, overwriting source signal
         for (t_size i = 0; i < sample_count; i++) {
-            sample_data[channel + i * stride] = output_buffer[i];
+            sample_data[channel + i * stride] = m_output_buffer[i];
         }
     }
 }
@@ -95,11 +95,11 @@ void lc_filter::prepare()
     freq_to_ir(m_cfg.sample_rate, freq_points.data(), db_deltas.data(), db_deltas.size(), 8.0f, ir.data(), ir.size(), m_cfg.debug);
 
     // initialize the convolvers
-    convolvers.resize(m_cfg.channel_count);
+    m_convolvers.resize(m_cfg.channel_count);
     for (int i = 0; i < m_cfg.channel_count; i++) {
-        if (!convolvers[i]) {
-            convolvers[i] = std::make_unique<fftconvolver::FFTConvolver>();
+        if (!m_convolvers[i]) {
+            m_convolvers[i] = std::make_unique<fftconvolver::FFTConvolver>();
         }
-        convolvers[i]->init(m_cfg.convolution_block_size, ir.data(), ir.size());
+        m_convolvers[i]->init(m_cfg.convolution_block_size, ir.data(), ir.size());
     }
 }

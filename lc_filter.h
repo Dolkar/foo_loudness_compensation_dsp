@@ -55,9 +55,9 @@ private:
     // The config
     config m_cfg;
     // Input buffer for one channel
-    std::vector<fftconvolver::Sample> input_buffer;
+    std::vector<fftconvolver::Sample> m_input_buffer;
     // Output buffer for one channel
-    std::vector<fftconvolver::Sample> output_buffer;
+    std::vector<fftconvolver::Sample> m_output_buffer;
     // Convolver for each channel
-    std::vector<std::unique_ptr<fftconvolver::FFTConvolver>> convolvers;
+    std::vector<std::unique_ptr<fftconvolver::FFTConvolver>> m_convolvers;
 };
