@@ -7,9 +7,10 @@
 // Holds plugin configuration
 struct t_loudness_compensation_config
 {
-    // Reference SPL of a -20 dBFS RMS pink noise: ~83 dB
-    // Typical mastering target: -9 LUFS
-    static constexpr t_int32 s_default_reference_spl = 83 + (20 - 9);
+    // Reference monitoring SPL of a -20 dBFS RMS pink noise: 78 dB
+    // Typical mastering target: -14 LUFS
+    // https://www.production-expert.com/production-expert-1/understanding-loudness-part-3-calibrating-your-monitors
+    static constexpr t_int32 s_default_reference_spl = 78 + (20 - 14);
 
     // The GUID that identifies this DSP and its configuration.
     static const GUID& g_get_guid() {
@@ -18,7 +19,7 @@ struct t_loudness_compensation_config
     }
 
     // The constructor sets the default values.
-    t_loudness_compensation_config(t_int32 full_volume_spl = 100, t_int32 reference_spl = s_default_reference_spl, t_int32 passthrough = 0) :
+    t_loudness_compensation_config(t_int32 full_volume_spl = 90, t_int32 reference_spl = s_default_reference_spl, t_int32 passthrough = 0) :
         m_full_volume_spl(full_volume_spl), m_reference_spl(reference_spl) {
     }
 

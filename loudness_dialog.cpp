@@ -91,14 +91,12 @@ BOOL loudness_compensation_dialog::on_message(UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 // Helper function for reading a validated value out of a control
-inline bool read_validate_spl(HWND hwnd, int dlg, int& new_value) {
+inline bool read_validate_spl(HWND hwnd, int dlg, int min_value, int max_value, int& new_value) {
     BOOL translated = TRUE;
     int value = GetDlgItemInt(hwnd, dlg, &translated, TRUE);
     if (translated) {
-        value = std::clamp(value, 20, 100);
-
-        HWND h_dlg = GetDlgItem(hwnd, dlg);
-        SetDlgItemInt(h_dlg, dlg, value, TRUE);
+        value = std::clamp(value, min_value, max_value);
+        SetDlgItemInt(hwnd, dlg, value, TRUE);
 
         if (value != new_value) {
             new_value = value;
@@ -122,8 +120,8 @@ void loudness_compensation_dialog::update_volume_display() {
 
 bool loudness_compensation_dialog::register_changes(bool force_register) {
     bool changed = force_register;
-    changed |= read_validate_spl(get_wnd(), IDC_FULL_VOLUME_SPL, m_params.m_full_volume_spl);
-    changed |= read_validate_spl(get_wnd(), IDC_REFERENCE_SPL, m_params.m_reference_spl);
+    changed |= read_validate_spl(get_wnd(), IDC_FULL_VOLUME_SPL, 20, 120, m_params.m_full_volume_spl);
+    changed |= read_validate_spl(get_wnd(), IDC_REFERENCE_SPL, 60, 100, m_params.m_reference_spl);
 
     if (changed) {
         dsp_preset_impl data;
