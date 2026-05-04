@@ -10,11 +10,11 @@ public:
         int sample_rate;
         // Number of channels
         int channel_count;
-        // The reference phon value for the loudness compensation target
-        // Aka the loudness level the track is assumed to have been mastered for
-        float reference_loudness;
-        // The current loudness level the track is being played at in phon
-        float current_loudness;
+        // The reference SPL value in dB for the loudness compensation target
+        // Aka how loud the music is assumed to have been mastered for
+        float reference_spl;
+        // The current SPL value the track is being listened to in dB
+        float current_spl;
         // The clipping threshold, as a max dB delta. The signal may be scaled down
         // to avoid clipping if the EQ exceeds this value.
         float clipping_threshold = 0.0f;

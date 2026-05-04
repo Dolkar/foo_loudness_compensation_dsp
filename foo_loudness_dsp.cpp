@@ -1,6 +1,5 @@
 #include "../SDK/foobar2000.h"
-#include "../helpers/helpers.h"
-#include "resource.h"
+#include "loudness_dialog.h"
 #include "lc_filter.h"
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -14,119 +13,7 @@ DECLARE_COMPONENT_VERSION(
     "By Dolkar in 2026\n"
 );
 
-// We will use a helper struct to held the configuration for our
-// DSP which can be used to pass around the relevant data to
-// the configuration dialog. The struct also implements the 
-// serialisation from and to dsp_preset instances which store
-// configuration data across sessions.
-struct t_loudness_compensation_config
-{
-    // The strength of the effect in percent.
-    t_int32 m_percent;
-
-    // The constructor sets the default values.
-    t_loudness_compensation_config(t_int32 p_percent = 100) : m_percent(p_percent) {
-    }
-
-    // The GUID that identifies this DSP and its configuration.
-    static const GUID& g_get_guid() {
-        static const GUID guid = { 0x66fbf000, 0x9066, 0x4dbe, { 0xa7, 0x9a, 0x6f, 0x41, 0xb2, 0x68, 0x26, 0x3f } };
-
-        return guid;
-    }
-
-    // Read data from a preset.
-    bool set_data(const dsp_preset& p_data) {
-        if (p_data.get_owner() != g_get_guid()) return false;
-        if (p_data.get_data_size() != sizeof(t_int32)) return false;
-        t_int32 temp = *(t_int32*)p_data.get_data();
-        byte_order::order_le_to_native_t(temp);
-        m_percent = temp;
-        return true;
-    }
-
-    // Write data to a preset.
-    void get_data(dsp_preset& p_data) {
-        p_data.set_owner(g_get_guid());
-        t_int32 temp = m_percent;
-        byte_order::order_native_to_le_t(temp);
-        p_data.set_data(&temp, sizeof(temp));
-    }
-};
-
-// Our configuration dialog is implemented as a modal dialog.
-// The helper class implements some safety measures to avoid
-// opening multiple non-nested modal dialogs.
-class loudness_compensation_dialog : public dialog_helper::dialog_modal
-{
-public:
-    loudness_compensation_dialog(const dsp_preset& p_data, dsp_preset_edit_callback& p_callback) : m_old_data(p_data), m_callback(p_callback), m_dirty(false) {
-        m_params.set_data(m_old_data);
-    }
-
-    virtual BOOL on_message(UINT msg, WPARAM wp, LPARAM lp) {
-        switch (msg) {
-            case WM_INITDIALOG:
-            {
-                HWND slider = GetDlgItem(get_wnd(), IDC_SLIDER);
-                // Needs redraw flag set for both calls, or things will be messed
-                // up if m_percent is zero.
-                SendMessage(slider, TBM_SETRANGE, TRUE, MAKELONG(-50, 200));
-                SendMessage(slider, TBM_SETPOS, TRUE, m_params.m_percent);
-                SendMessage(slider, TBM_SETTICFREQ, 25, 0);
-                update_display();
-            }
-            break;
-
-            // Slider has been moved.
-            case WM_HSCROLL:
-            {
-                m_dirty = true;
-                update_display();
-            }
-            break;
-
-            case WM_COMMAND:
-                switch (wp) {
-                    case IDOK:
-                    {
-                        end_dialog(1);
-                    }
-                    break;
-
-                    case IDCANCEL:
-                    {
-                        m_callback.on_preset_changed(m_old_data);
-                        end_dialog(0);
-                    }
-                    break;
-                }
-                break;
-        }
-        return 0;
-    }
-
-private:
-    void update_display() {
-        m_params.m_percent = SendDlgItemMessage(get_wnd(), IDC_SLIDER, TBM_GETPOS, 0, 0);
-        if (m_dirty) {
-            dsp_preset_impl data;
-            m_params.get_data(data);
-            m_callback.on_preset_changed(data);
-            m_dirty = false;
-        }
-
-        uSetDlgItemText(get_wnd(), IDC_STATIC_DISPLAY,
-            pfc::string_formatter() << pfc::format_int(m_params.m_percent) << "%");
-    }
-
-    bool m_dirty;
-    const dsp_preset& m_old_data;
-    t_loudness_compensation_config m_params;
-    dsp_preset_edit_callback& m_callback;
-};
-
-// Monitors the current volume so we can retrieve it from the dsp thread
+// Monitors the current volume so we can retrieve it from the dsp thread or signal to UI
 class volume_monitor : public play_callback_static
 {
 public:
@@ -139,8 +26,15 @@ public:
     // Received callback
     void on_volume_change(float p_new_val) override
     {
-        pfc::mutexScope guard(m_guard);
-        m_volume = p_new_val;
+        {
+            pfc::mutexScope guard(m_guard);
+            m_volume = p_new_val;
+        }
+
+        // Notify the options dialog if open
+        if (loudness_compensation_dialog::s_active_dialog) {
+            PostMessage(loudness_compensation_dialog::s_active_dialog, WM_UPDATE_VOLUME, get_volume_int(), 0);
+        }
     }
 
     // Retrieve the current volume in dB
@@ -148,6 +42,13 @@ public:
         pfc::mutexScope guard(m_guard);
         return m_volume;
     }
+
+    // Retrieve the current volume in dB, rounded
+    int get_volume_int() {
+        float volume = get_volume();
+        return static_cast<int>(std::roundf(volume));
+    }
+
     // We only care about volume change
     unsigned get_flags() override
     {
@@ -202,11 +103,11 @@ public:
     // The provided callback is used to report configuration changes back to the caller.
     static void g_show_config_popup(const dsp_preset& p_data, HWND p_parent, dsp_preset_edit_callback& p_callback) {
         t_loudness_compensation_config params;
-        if (params.set_data(p_data)) {
-            loudness_compensation_dialog dlg(p_data, p_callback);
-            // TODO dialog_helper::dialog_modal is deprecated
-            dlg.run(IDD_CONFIG, p_parent);
-        }
+        params.set_data(p_data);
+
+        loudness_compensation_dialog dlg(p_data, p_callback, foo_loudness_dsp_volume_monitor.get_static_instance().get_volume_int());
+        // TODO dialog_helper::dialog_modal is deprecated
+        dlg.run(IDD_CONFIG, p_parent);
     }
 
     // Return our default preset.
@@ -217,10 +118,7 @@ public:
 
     // Read parameters from the provided preset.
     bool set_data(const dsp_preset& p_data) {
-        t_loudness_compensation_config params;
-        if (!params.set_data(p_data)) return false;
-        //m_factor = (audio_sample)(params.m_percent * 0.01);
-        return true;
+        return m_params.set_data(p_data);
     }
 
     virtual void on_endoftrack(abort_callback& p_abort) {
@@ -233,25 +131,34 @@ public:
 
     // Process chunk.
     virtual bool on_chunk(audio_chunk* chunk, abort_callback& p_abort) {
+        // Fetch parameters
         unsigned channel_count = chunk->get_channels();
         t_size sample_count = chunk->get_sample_count();
         unsigned sample_rate = chunk->get_sample_rate();
-        float current_loudness = get_current_loudness();
+        float current_spl = get_current_spl();
+        float reference_spl = m_params.m_reference_spl;
+        float strength = loudness_compensation_dialog::s_passthrough ? 0.0f : 1.0f;
 
         // Initialize
         if (!m_active_filter) {
-            prepare_active_filter(channel_count, sample_rate, current_loudness);
+            prepare_active_filter(channel_count, sample_rate, current_spl, reference_spl, strength);
         }
 
-        // Test for changed parameters
+        // Test for changed filter parameters
         const lc_filter::config& curr_cfg = m_active_filter->get_config();
+
+        // We can't fade if these have changed:
         if (curr_cfg.channel_count != channel_count || curr_cfg.sample_rate != sample_rate) {
-            // We can't fade in this case
-            prepare_active_filter(channel_count, sample_rate, current_loudness);
-        } else if (curr_cfg.current_loudness != current_loudness && m_fadeout_lifetime <= 0) {
-            // Fade when volume or other parameters have changed
+            flush();
+            prepare_active_filter(channel_count, sample_rate, current_spl, reference_spl, strength);
+        } // Fade when volume or other parameters have changed, but not when already fading:
+        else if (m_fadeout_lifetime <= 0 && (
+            current_spl != curr_cfg.current_spl ||
+            reference_spl != curr_cfg.reference_spl ||
+            strength != curr_cfg.strength)) {
+
             std::swap(m_active_filter, m_fadeout_filter);
-            prepare_active_filter(channel_count, sample_rate, current_loudness);
+            prepare_active_filter(channel_count, sample_rate, current_spl, reference_spl, strength);
 
             // Leave half of ir_length for the new filter to warm up
             m_fadeout_lifetime = curr_cfg.ir_length / 2 + s_crossfade_samples;
@@ -309,21 +216,22 @@ public:
     }
 
 private:
-    void prepare_active_filter(int channel_count, int sample_rate, float loudness) {
+    void prepare_active_filter(int channel_count, int sample_rate, float current_spl, float reference_spl, float strength) {
         lc_filter::config cfg;
         cfg.sample_rate = sample_rate;
         cfg.channel_count = channel_count;
-        // Reference SPL of a -20 dBFS RMS pink noise: ~83 dB
-        // Typical mastering target: -9 LUFS
-        // Here we just assume SPL ~= phon. This is only true for a pure 1khz tone, but
-        // it's (probably) good enough for what we need
-        cfg.reference_loudness = 83.0f + (20.0f - 9.0f);
-        cfg.current_loudness = loudness;
-
-        // We have room allowed by volume control
+        cfg.reference_spl = reference_spl;
+        cfg.current_spl = current_spl;
+        cfg.strength = strength;
+        // We have clipping room allowed by volume control
         float volume = foo_loudness_dsp_volume_monitor.get_static_instance().get_volume();
         cfg.clipping_threshold = -volume;
+
+#ifdef NDEBUG
+        cfg.debug = false;
+#else
         cfg.debug = true;
+#endif // NDEBUG
 
         if (!m_active_filter) {
             m_active_filter = std::make_unique<lc_filter>(cfg);
@@ -332,15 +240,15 @@ private:
         }
     }
 
-    float get_current_loudness() const {
+    float get_current_spl() const {
         float volume = foo_loudness_dsp_volume_monitor.get_static_instance().get_volume();
-
-        float max_volume_loudness = 100.0f;
-        float loudness = max_volume_loudness + volume;
+        float spl = m_params.m_full_volume_spl + volume;
         // clamp to valid range
-        return std::clamp(loudness, 20.0f, 100.0f);
+        return std::clamp(spl, 20.0f, 100.0f);
     }
 
+    // Current config parameters
+    t_loudness_compensation_config m_params;
     // The currently active filter (if any)
     std::unique_ptr<lc_filter> m_active_filter;
     // The filter currently being faded out

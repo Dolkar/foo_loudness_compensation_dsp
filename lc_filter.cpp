@@ -53,12 +53,17 @@ void lc_filter::process(audio_sample* sample_data, t_size sample_count)
 
 void lc_filter::prepare()
 {
+    // Here we just assume SPL ~= phon. This is only true for a pure 1khz tone, but
+    // it's (probably) good enough for what we need
+    float reference_loudness = m_cfg.reference_spl;
+    float current_loudness = m_cfg.current_spl;
+
     if (m_cfg.debug) {
         FB2K_DebugLog() << "Preparing filter with parameters:";
         FB2K_DebugLog() << "Sample rate: " << m_cfg.sample_rate;
         FB2K_DebugLog() << "Channel count: " << m_cfg.channel_count;
-        FB2K_DebugLog() << "Reference loudness: " << pfc::format_float(m_cfg.reference_loudness, 0, 1) << " phon";
-        FB2K_DebugLog() << "Current loudness: " << pfc::format_float(m_cfg.current_loudness, 0, 1) << " phon";
+        FB2K_DebugLog() << "Reference loudness: " << pfc::format_float(reference_loudness, 0, 1) << " phon";
+        FB2K_DebugLog() << "Current loudness: " << pfc::format_float(current_loudness, 0, 1) << " phon";
     }
 
     // set up frequency range to sample the curve on
@@ -74,7 +79,13 @@ void lc_filter::prepare()
     // sample the curve
     std::vector<float> db_deltas;
     db_deltas.resize(freq_points.size());
-    make_compensation_curve(m_cfg.reference_loudness, m_cfg.current_loudness, m_cfg.clipping_threshold, freq_points.data(), freq_points.size(), db_deltas.data());
+    make_compensation_curve(reference_loudness, current_loudness, m_cfg.clipping_threshold, freq_points.data(), freq_points.size(), db_deltas.data());
+
+    if (m_cfg.strength != 1.0f) {
+        for (int i = 0; i < db_deltas.size(); i++) {
+            db_deltas[i] *= m_cfg.strength;
+        }
+    }
 
     if (m_cfg.debug) {
         float mindb = db_deltas[0];
