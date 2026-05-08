@@ -7,7 +7,7 @@
 
 DECLARE_COMPONENT_VERSION(
     "Loudness Compensation DSP",
-    "0.1.0",
+    "1.1.0",
     "Loudness Compensation DSP for foobar2000\n"
     "Applies equalization based on listening volume and set parameters to compensate for psychoacoustic effects "
     "of human hearing at lower volumes.\n"

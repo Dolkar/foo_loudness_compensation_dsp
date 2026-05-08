@@ -61,5 +61,6 @@
   </ItemGroup>
   <ItemGroup>
     <Library Include="..\shared\shared-Win32.lib" />
+    <Library Include="..\shared\shared-x64.lib" />
   </ItemGroup>
 </Project>
