@@ -4,8 +4,7 @@
 #include "compensation_curve.h"
 #include "../SDK/foobar2000.h"
 
-void lc_filter::reset(const config& cfg)
-{
+void lc_filter::reset(const config& cfg) {
     m_cfg = cfg;
     for (auto& conv : m_convolvers)
         conv->reset();
@@ -17,8 +16,7 @@ void lc_filter::reset(const config& cfg)
     prepare();
 }
 
-void lc_filter::flush()
-{
+void lc_filter::flush() {
     for (auto& conv : m_convolvers)
         conv->flush();
 
@@ -27,8 +25,7 @@ void lc_filter::flush()
     }
 }
 
-void lc_filter::process(audio_sample* sample_data, t_size sample_count)
-{
+void lc_filter::process(audio_sample* sample_data, t_size sample_count) {
     if (sample_count > m_input_buffer.size()) {
         m_input_buffer.resize(sample_count);
         m_output_buffer.resize(sample_count);
@@ -51,9 +48,8 @@ void lc_filter::process(audio_sample* sample_data, t_size sample_count)
     }
 }
 
-void lc_filter::prepare()
-{
-    // Here we just assume SPL ~= phon. This is only true for a pure 1khz tone, but
+void lc_filter::prepare() {
+    // Here we just assume SPL [dB] ~= loudness [phon]. This is only true for a pure 1khz tone, but
     // it's (probably) good enough for what we need
     float reference_loudness = m_cfg.reference_spl;
     float current_loudness = m_cfg.current_spl;

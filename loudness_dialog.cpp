@@ -1,5 +1,6 @@
 #include "loudness_dialog.h"
 
+#include "compensation_curve.h"
 #include <algorithm>
 
 bool t_loudness_compensation_config::set_data(const dsp_preset& p_data) {
@@ -31,6 +32,10 @@ BOOL loudness_compensation_dialog::on_message(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_INITDIALOG:
         {
             s_active_dialog = get_wnd();
+
+            // Setup gain chart
+            m_chart.subclass_dlg_item(IDC_CHART, CWnd::FromHandle(get_wnd()));
+            m_chart.set_active(true);
             update_display();
             break;
         }
@@ -48,6 +53,7 @@ BOOL loudness_compensation_dialog::on_message(UINT msg, WPARAM wp, LPARAM lp) {
                 case IDC_PASSTHROUGH:
                 {
                     s_passthrough = SendDlgItemMessage(get_wnd(), IDC_PASSTHROUGH, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                    update_volume_display();
                     break;
                 }
                 case IDOK:
@@ -116,6 +122,27 @@ void loudness_compensation_dialog::update_display() {
 void loudness_compensation_dialog::update_volume_display() {
     SetDlgItemInt(get_wnd(), IDC_CURRENT_VOLUME, m_current_volume, TRUE);
     SetDlgItemInt(get_wnd(), IDC_CURRENT_VOLUME_SPL, m_params.m_full_volume_spl + m_current_volume, TRUE);
+
+    // When volume changes, we also need to update the graph
+    // Use log distribution for frequency points
+    std::vector<float> freq_points;
+    freq_points.resize(100);
+    for (int i = 0; i < freq_points.size(); i++) {
+        float log_freq = (logf(20000.0f) - logf(20.0f)) * i / (freq_points.size() - 1.0f) + logf(20.0f);
+        freq_points[i] = expf(log_freq);
+    }
+
+    // Like in lc_filter, assume SPL ~= loudness
+    float ref_loudness = std::clamp((float)m_params.m_reference_spl, 20.0f, 100.0f);
+    float current_loudness = std::clamp((float)(m_params.m_full_volume_spl + m_current_volume), 20.0f, 100.0f);
+    float clipping_threshold = (float)-m_current_volume;
+
+    std::vector<float> gains;
+    gains.resize(freq_points.size());
+    make_compensation_curve(ref_loudness, current_loudness, clipping_threshold, freq_points.data(), freq_points.size(), gains.data());
+
+    m_chart.set_data_points(freq_points, gains, clipping_threshold);
+    m_chart.set_active(!s_passthrough);
 }
 
 bool loudness_compensation_dialog::register_changes(bool force_register) {

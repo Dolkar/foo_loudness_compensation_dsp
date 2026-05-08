@@ -1,7 +1,9 @@
 #pragma once
 
+#include <afxwin.h>
 #include "../SDK/foobar2000.h"
 #include "../helpers/helpers.h"
+#include "gain_chart_ctrl.h"
 #include "resource.h"
 
 // Holds plugin configuration
@@ -72,4 +74,6 @@ private:
     t_loudness_compensation_config m_params;
     // Callback on preset change
     dsp_preset_edit_callback& m_callback;
+    // Chart class
+    gain_chart_ctrl m_chart;
 };

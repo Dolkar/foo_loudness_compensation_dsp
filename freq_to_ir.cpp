@@ -9,8 +9,7 @@
 #include <cmath>
 #include <algorithm>
 
-float bessel_i0(float x)
-{
+float bessel_i0(float x) {
     float sum = 1.0f, term = 1.0f;
     for (int k = 1; k <= 20; ++k) {
         term *= (x / (2.0f * k));
@@ -21,8 +20,7 @@ float bessel_i0(float x)
     return sum;
 }
 
-void kaiser_window(float* w, size_t len, float beta)
-{
+void kaiser_window(float* w, size_t len, float beta) {
     float denom = bessel_i0(beta);
     float half = 0.5f * static_cast<float>(len - 1);
     for (size_t i = 0; i < len; ++i) {
@@ -42,8 +40,7 @@ bool verify_ir_response(
     float        tolerance);
 
 void freq_to_ir(float sample_rate, const float* freq_points, const float* gain_db, size_t num_points,
-    float kaiser_beta, float* ir_out, size_t ir_length, bool verify)
-{
+    float kaiser_beta, float* ir_out, size_t ir_length, bool verify) {
     // Choose FFT size (oversampled >= 8x for negligible ripple)
     size_t fft_size = 1;
     while (fft_size < ir_length * 8) fft_size <<= 1;
@@ -111,8 +108,7 @@ void freq_to_ir(float sample_rate, const float* freq_points, const float* gain_d
 }
 
 bool verify_ir_response(float sample_rate, const float* ir, size_t ir_length, const float* freq_points,
-    const float* gain_db, size_t num_points, float tolerance)
-{
+    const float* gain_db, size_t num_points, float tolerance) {
     // Choose a large FFT size for accurate frequency measurement
     size_t Nfft = 1;
     while (Nfft < ir_length * 16) Nfft <<= 1;   // at least 16x oversampling

@@ -1,3 +1,4 @@
+#include <afxwin.h>
 #include "../SDK/foobar2000.h"
 #include "loudness_dialog.h"
 #include "lc_filter.h"
@@ -24,8 +25,7 @@ public:
     }
 
     // Received callback
-    void on_volume_change(float p_new_val) override
-    {
+    void on_volume_change(float p_new_val) override {
         {
             pfc::mutexScope guard(m_guard);
             m_volume = p_new_val;
@@ -50,8 +50,7 @@ public:
     }
 
     // We only care about volume change
-    unsigned get_flags() override
-    {
+    unsigned get_flags() override {
         return play_callback::flag_on_playback_starting | play_callback::flag_on_volume_change;
     }
     void on_playback_new_track(metadb_handle_ptr p_track) override {}
@@ -70,8 +69,7 @@ private:
 
 static play_callback_static_factory_t<volume_monitor> foo_loudness_dsp_volume_monitor;
 
-void crossfade(float t, float& gain_out, float& gain_in)
-{
+void crossfade(float t, float& gain_out, float& gain_in) {
     t = std::clamp(t, 0.0f, 1.0f);
     gain_in = sin(M_PI / 2.0 * t);
     gain_out = cos(M_PI / 2.0 * t);
