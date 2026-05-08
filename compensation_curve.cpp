@@ -2,8 +2,7 @@
 
 #include <cmath>
 
-struct iso226_contour_sample
-{
+struct iso226_contour_sample {
     // Frequency [Hz]
     float freq;
     // Loudness perception exponent
@@ -55,8 +54,7 @@ static const iso226_contour_sample contour[contour_count] = {
 // Helper: cubic Catmull-Rom interpolation for one parameter
 // Given four points (x0,y0), (x1,y1), (x2,y2), (x3,y3) and a query x in [x1, x2],
 // returns the interpolated y value.
-float catmull_rom(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, float x)
-{
+float catmull_rom(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, float x) {
     float t = (x - x1) / (x2 - x1); // t in [0,1]
     float t2 = t * t;
     float t3 = t2 * t;
@@ -69,8 +67,7 @@ float catmull_rom(float x0, float y0, float x1, float y1, float x2, float y2, fl
     return y;
 }
 
-iso226_contour_sample interpolate_contour(int lower_bound_index, float frequency)
-{
+iso226_contour_sample interpolate_contour(int lower_bound_index, float frequency) {
     int n = contour_count;
     int i = lower_bound_index;
 
@@ -87,7 +84,7 @@ iso226_contour_sample interpolate_contour(int lower_bound_index, float frequency
     int i2 = i + 1;
     int i3 = (i + 2 < n) ? i + 2 : i + 1;
 
-    // Logarithmic x?coordinates
+    // Logarithmic x-coordinates
     float log_freq = logf(frequency);
     float x0 = logf(contour[i0].freq);
     float x1 = logf(contour[i1].freq);
@@ -120,8 +117,7 @@ iso226_contour_sample interpolate_contour(int lower_bound_index, float frequency
 }
 
 // Returns the sound pressure level in dB that corresponds to the given loudness at the frequency described by the contour sample
-float evaluate_contour(const iso226_contour_sample& sample, float loudness)
-{
+float evaluate_contour(const iso226_contour_sample& sample, float loudness) {
     float a = powf(4e-10f, 0.3f - sample.a_f);
     float b = powf(10.0f, 0.03f * loudness) - powf(10.0f, 0.072f);
     float c = powf(10.0f, sample.a_f * (sample.T_f + sample.L_U) / 10.0f);
@@ -130,8 +126,7 @@ float evaluate_contour(const iso226_contour_sample& sample, float loudness)
 }
 
 // Evaluates the curve for the given parameters
-void eval_curve(float reference_loudness, float loudness, const float* freq_points, int freq_count, float* freq_gains)
-{
+void eval_curve(float reference_loudness, float loudness, const float* freq_points, int freq_count, float* freq_gains) {
     int left = 0;
     for (int i = 0; i < freq_count; i++) {
         float freq = freq_points[i];
@@ -153,8 +148,7 @@ void eval_curve(float reference_loudness, float loudness, const float* freq_poin
 }
 
 // Returns the A-weighting linear multiplier for a given frequency
-float a_weighting_factor(float freq)
-{
+float a_weighting_factor(float freq) {
     float f2 = freq * freq;
 
     // Numerator: 12200^2 * f^4
@@ -178,8 +172,7 @@ float a_weighting_factor(float freq)
 }
 
 // Calculates the weighted average gain and maximum gain
-void analyze_curve(const float* freq_points, const float* freq_gains, int freq_count, float& wavg_gain, float& max_gain)
-{
+void analyze_curve(const float* freq_points, const float* freq_gains, int freq_count, float& wavg_gain, float& max_gain) {
     float w = 0.0f;
     wavg_gain = 0.0f;
     max_gain = 0.0f;
@@ -194,8 +187,7 @@ void analyze_curve(const float* freq_points, const float* freq_gains, int freq_c
     wavg_gain /= w;
 }
 
-void make_compensation_curve(float reference_loudness, float loudness, float clipping_threshold, const float* freq_points, int freq_count, float* freq_gains)
-{
+void make_compensation_curve(float reference_loudness, float loudness, float clipping_threshold, const float* freq_points, int freq_count, float* freq_gains) {
     // First evaluate the curve directly on the given parameters
     eval_curve(reference_loudness, loudness, freq_points, freq_count, freq_gains);
 
@@ -203,8 +195,7 @@ void make_compensation_curve(float reference_loudness, float loudness, float cli
     float wavg_gain, max_gain;
     analyze_curve(freq_points, freq_gains, freq_count, wavg_gain, max_gain);
 
-    if (max_gain - wavg_gain > clipping_threshold)
-    {
+    if (max_gain - wavg_gain > clipping_threshold) {
         // We need to reduce loudness to prevent clipping. That requires us to re-evaluate
         loudness += clipping_threshold - (max_gain - wavg_gain);
         eval_curve(reference_loudness, loudness, freq_points, freq_count, freq_gains);
@@ -222,8 +213,7 @@ void make_compensation_curve(float reference_loudness, float loudness, float cli
 #include <cstdio>
 #include <vector>
 
-void export_curves()
-{
+void export_curves() {
     int freq_count = 300;
     float start_freq = 20.0f;
     float end_freq = 20000.0f;
