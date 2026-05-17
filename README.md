@@ -1,10 +1,11 @@
 # Loudness Compensation DSP for foobar2000
 
 A plugin for the [foobar2000](https://www.foobar2000.org/) music player that implements [loudness compensation](https://en.wikipedia.org/wiki/Loudness_compensation) as a DSP.
-Its goal is to improve the listening experience at lower volumes, boosting the frequencies that human hearing does not pick up as much during quieter playback.
+Its goal is to improve the listening experience at lower volumes, boosting the frequencies that human hearing does not pick up as much during quieter playback. With it, you can
+enjoy your music how it's meant to sound while protecting your hearing.
 
-It assumes that listening volume is mainly controlled through the in-app volume slider and the rest of the sound system (OS, external amplifier) is kept at the same amplification.
-For accurate compensation, users should measure their actual listening level in dB and input it in the plugin's configuration dialog:
+The plugin assumes that listening volume is mainly controlled through the in-app volume slider and that the rest of the sound system (OS, external amplifier) is kept at the same
+amplification. For accurate compensation, users should measure their actual listening level in dB and input it in the plugin's configuration dialog:
 (Preferences -> Playback -> DSP Manager -> Loudness Compensation DSP -> [...]).
 
 <div align="center"><img width="646" height="679" alt="Configuration" src="https://github.com/user-attachments/assets/b048c662-19e5-45b4-bbd1-f53c397f7ce1" /></div>
